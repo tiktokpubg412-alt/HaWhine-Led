@@ -1,7 +1,6 @@
 
 name: Build LED CAR APK
-      - name: Fix Java and Kotlin JVM targets
-        run: |
+      run:
           APP_GRADLE=$(find project -path '*/app/build.gradle' -print -quit)
 
           if [ -z "$APP_GRADLE" ]; then
