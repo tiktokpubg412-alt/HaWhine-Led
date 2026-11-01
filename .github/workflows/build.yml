@@ -1,23 +1,131 @@
-      - name: Fix Java and Kotlin JVM targets
-        run: |
-          APP_GRADLE=$(find project -path '*/app/build.gradle' -print -quit)
+concurrency: name: Build LED CAR APK
 
-          if [ -z "$APP_GRADLE" ]; then
-            echo "app/build.gradle not found"
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          accept-android-sdk-licenses: true
+
+      - name: Accept SDK licenses
+        run: yes | sdkmanager --licenses
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Extract Android project
+        run: |
+          unzip -o "LED_CAR_Custom_Android_Starter_with_APK_build.zip" -d project
+
+      - name: Fix Java and Kotlin versions
+        run: |
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+
+          files = list(Path("project").glob("**/app/build.gradle"))
+          if not files:
+              raise SystemExit("ERROR: app/build.gradle not found")
+
+          path = files[0]
+          content = path.read_text()
+
+          match = re.search(r'\bandroid\s*\{', content)
+          if not match:
+              raise SystemExit("ERROR: android block not found")
+
+          start = content.find("{", match.start())
+          depth = 0
+          end = None
+
+          for i in range(start, len(content)):
+              if content[i] == "{":
+                  depth += 1
+              elif content[i] == "}":
+                  depth -= 1
+                  if depth == 0:
+                      end = i
+                      break
+
+          if end is None:
+              raise SystemExit("ERROR: android block is incomplete")
+
+          block = content[start + 1:end]
+
+          compile_block = """compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }"""
+
+          kotlin_block = """kotlinOptions {
+                  jvmTarget = '17'
+              }"""
+
+          if re.search(r'\bcompileOptions\s*\{', block):
+              block = re.sub(
+                  r'\bcompileOptions\s*\{[^{}]*\}',
+                  compile_block,
+                  block,
+                  count=1
+              )
+          else:
+              block += "\n    " + compile_block + "\n"
+
+          if re.search(r'\bkotlinOptions\s*\{', block):
+              block = re.sub(
+                  r'\bkotlinOptions\s*\{[^{}]*\}',
+                  kotlin_block,
+                  block,
+                  count=1
+              )
+          else:
+              block += "\n    " + kotlin_block + "\n"
+
+          content = content[:start + 1] + block + content[end:]
+          path.write_text(content)
+
+          print("Fixed Java and Kotlin targets in:", path)
+          PY
+
+      - name: Build APK
+        run: |
+          PROJECT_DIR=$(find project -name settings.gradle -printf '%h\n' | head -n 1)
+
+          if [ -z "$PROJECT_DIR" ]; then
+            PROJECT_DIR=$(find project -name settings.gradle.kts -printf '%h\n' | head -n 1)
+          fi
+
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "ERROR: settings.gradle not found"
             exit 1
           fi
 
-          cat >> "$APP_GRADLE" <<'EOF'
+          echo "Project directory: $PROJECT_DIR"
+          gradle -p "$PROJECT_DIR" assembleDebug
 
-          android {
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
-              kotlinOptions {
-                  jvmTarget = '17'
-              }
-          }
-          EOF
-
-          echo "Updated: $APP_GRADLE"
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: LED-CAR-APK
+          path: project/**/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
