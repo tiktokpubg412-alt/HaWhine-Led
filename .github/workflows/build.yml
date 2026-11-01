@@ -1,3 +1,5 @@
+
+name: Build LED CAR APK
       - name: Fix Java and Kotlin JVM targets
         run: |
           APP_GRADLE=$(find project -path '*/app/build.gradle' -print -quit)
@@ -21,8 +23,6 @@
           EOF
 
           echo "Updated: $APP_GRADLE"
-name: Build LED CAR APK
-
 on:
   workflow_dispatch:
 
