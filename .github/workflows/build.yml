@@ -1,6 +1,5 @@
-
-name: Build LED CAR APK
-      run:
+      - name: Fix Java and Kotlin JVM targets
+        run: |
           APP_GRADLE=$(find project -path '*/app/build.gradle' -print -quit)
 
           if [ -z "$APP_GRADLE" ]; then
@@ -22,57 +21,3 @@ name: Build LED CAR APK
           EOF
 
           echo "Updated: $APP_GRADLE"
-on:
-  workflow_dispatch:
-
-permissions:
-  contents: read
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v4
-        with:
-          accept-android-sdk-licenses: true
-
-      - name: Accept SDK licenses
-        run: yes | sdkmanager --licenses
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.9'
-
-      - name: Extract project
-        run: |
-          unzip -o "LED_CAR_Custom_Android_Starter_with_APK_build.zip" -d project
-          find project -name settings.gradle -o -name settings.gradle.kts
-
-      - name: Build APK
-        run: |
-          PROJECT_DIR=$(find project -name settings.gradle -printf '%h\n' | head -n 1)
-          if [ -z "$PROJECT_DIR" ]; then
-            PROJECT_DIR=$(find project -name settings.gradle.kts -printf '%h\n' | head -n 1)
-          fi
-          echo "Project directory: $PROJECT_DIR"
-          gradle -p "$PROJECT_DIR" assembleDebug
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: LED-CAR-APK
-          path: project/**/app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
-          
